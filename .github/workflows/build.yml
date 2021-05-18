@@ -1,0 +1,59 @@
+# This workflow will build a Java project with Maven
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+
+jobs:
+  Test-NoGitHistory:
+    runs-on: ubuntu-latest
+    steps:
+        - run: echo "Triggered by a ${{ github.event_name }} event."
+        - run: echo "Running on a ${{ runner.os }} server hosted by GitHub."
+        - run: echo "Repository is ${{ github.repository }}, branch is ${{ github.ref }}."
+
+        - name: Checkout repository
+          uses: actions/checkout@v2
+          with:
+            fetch-depth: 0
+
+        - name: Build with Maven
+          run: mvn -B package --file pom.xml
+       
+        # Refer to Step 1 for more details
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v1
+          if: ${{ always() }}
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: us-west-2
+        
+        # Refer to Step 2 for more details    
+        - name: Checkout the CodeGuru Reviewer Action repository
+          uses: actions/checkout@v2
+          if: ${{ always() }}
+          with:
+            repository: vijejain/cicd-actions
+            ref: refs/heads/main
+            token: ${{ secrets.TOKEN }}   # Required for Private Beta
+            path: ./.github/vijejain/cicd-actions
+
+        - name: AWS CodeGuru Reviewer Scanner
+          uses: ./.github/vijejain/cicd-actions
+          if: ${{ always() }} 
+          with:
+            src_path: ./src        # Repository root 
+            build_path: target # build artifact(s) directory
+            s3_bucket: codeguru-reviewer-github-xxz-test  # S3 Bucket with "codeguru-reviewer-*" prefix
+        
+        - name: Upload review result
+          if: ${{ always() }}
+          uses: github/codeql-action/upload-sarif@v1
+          with:
+            sarif_file: codeguru-results.sarif.json
